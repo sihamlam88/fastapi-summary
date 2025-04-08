@@ -6,14 +6,15 @@ import os
 
 app = FastAPI()
 
-# Hugging Face model endpoint
+# Hugging Face Inference API settings
 HF_API_URL = "https://api-inference.huggingface.co/models/philschmid/bart-large-cnn-samsum"
-HF_API_TOKEN = os.getenv("HF_TOKEN")  # You’ll set this on Render
+HF_API_TOKEN = os.getenv("HF_TOKEN")
 
 headers = {
     "Authorization": f"Bearer {HF_API_TOKEN}"
 }
 
+# Input models
 class Turn(BaseModel):
     speaker: str
     text: str
@@ -21,15 +22,21 @@ class Turn(BaseModel):
 class Transcript(BaseModel):
     transcript: List[Turn]
 
+# Summarization endpoint with full debugging output
 @app.post("/summarize")
 async def summarize_call(data: Transcript):
     dialogue = "\n".join([f"{turn.speaker}: {turn.text}" for turn in data.transcript])
     payload = {"inputs": dialogue}
-    response = requests.post(HF_API_URL, headers=headers, json=payload)
-    result = response.json()
-    
-    # Handle model warmup
-    if isinstance(result, dict) and result.get("error"):
-        return {"summary": "Model is warming up or unavailable. Please try again shortly."}
 
-    return {"summary": result[0]["summary_text"]}
+    response = requests.post(HF_API_URL, headers=headers, json=payload)
+
+    try:
+        result = response.json()
+    except Exception:
+        return {
+            "error": "Failed to parse Hugging Face JSON response.",
+            "raw_response": response.text
+        }
+
+    # Return the full response from Hugging Face for debugging
+    return {"huggingface_response": result}
